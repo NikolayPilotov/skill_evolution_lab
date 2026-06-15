@@ -62,6 +62,10 @@ export default function App() {
     );
   }, [runs]);
 
+  const activityLevel = runs.some((run) => busyStatuses.has(run.status)) ? 78 : Math.min(100, runs.length * 18 + 8);
+  const severityLevel = Math.min(100, (statusCounts.failed || 0) * 22 + (statusCounts.eval_failed || 0) * 22 + 6);
+  const stabilityLevel = Math.min(100, (statusCounts.passed || 0) * 26 + (statusCounts.promoted || 0) * 34 + 10);
+
   async function refresh(nextSkillId = selectedSkillId) {
     const [nextSkills, nextLiveSkills, nextRuns] = await Promise.all([
       fetchSkills(),
@@ -184,6 +188,12 @@ export default function App() {
           <h1>Skill Evolution Lab</h1>
           <p>Single-lineage Codex skill mutation, eval, and promotion.</p>
         </div>
+        <nav className="mode-tabs" aria-label="Lab sections">
+          <span>Overview</span>
+          <span>Genome</span>
+          <span>Evaluations</span>
+          <span>Promotion</span>
+        </nav>
         <button className="icon-button" type="button" onClick={() => refresh()} title="Refresh lab state">
           <RefreshCw size={18} />
         </button>
@@ -192,111 +202,163 @@ export default function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="lab-grid">
-        <aside className="left-rail">
-          <section className="panel">
-            <div className="panel-title">
-              <Upload size={18} />
-              <h2>Import</h2>
+        <section className="core-deck">
+          <section className="panel gene-stage">
+            <div className="stage-glass" aria-hidden="true">
+              <div className="gene-strand" />
+              <div className="scanner-ring ring-a" />
+              <div className="scanner-ring ring-b" />
             </div>
-            <select value={selectedLiveSkillId} onChange={(event) => setSelectedLiveSkillId(event.target.value)}>
-              <option value="">Choose live skill</option>
-              {liveSkills.map((skill) => (
-                <option key={skill.id} value={skill.id}>
-                  {skill.id}
-                </option>
-              ))}
-            </select>
-            <div className="button-row">
-              <button type="button" onClick={() => handleImport(false)} disabled={!selectedLiveSkillId || loading}>
-                <Upload size={16} />
-                Import
-              </button>
-              <button type="button" className="secondary" onClick={() => handleImport(true)} disabled={!selectedLiveSkillId || loading}>
-                <RefreshCw size={16} />
-                Refresh
-              </button>
+
+            <div className="stage-overlay">
+              <section className="import-strip">
+                <div className="panel-title">
+                  <Upload size={18} />
+                  <h2>Import</h2>
+                </div>
+                <select value={selectedLiveSkillId} onChange={(event) => setSelectedLiveSkillId(event.target.value)}>
+                  <option value="">Choose live skill</option>
+                  {liveSkills.map((skill) => (
+                    <option key={skill.id} value={skill.id}>
+                      {skill.id}
+                    </option>
+                  ))}
+                </select>
+                <div className="button-row compact">
+                  <button type="button" onClick={() => handleImport(false)} disabled={!selectedLiveSkillId || loading}>
+                    <Upload size={16} />
+                    Import
+                  </button>
+                  <button type="button" className="secondary" onClick={() => handleImport(true)} disabled={!selectedLiveSkillId || loading}>
+                    <RefreshCw size={16} />
+                    Refresh
+                  </button>
+                </div>
+              </section>
+
+              <section className="skill-list">
+                <div className="panel-title">
+                  <GitBranch size={18} />
+                  <h2>Skill Genome</h2>
+                </div>
+                {skills.length === 0 && <p className="muted">No repo skills yet.</p>}
+                <div className="hex-skill-grid">
+                  {skills.map((skill, index) => (
+                    <button
+                      className={`skill-row hex-tile tile-${index % 8} ${skill.id === selectedSkillId ? "selected" : ""}`}
+                      key={skill.id}
+                      type="button"
+                      onClick={() => setSelectedSkillId(skill.id)}
+                    >
+                      <span>{skill.name}</span>
+                      <small>{skill.id}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
             </div>
           </section>
 
-          <section className="panel skill-list">
-            <div className="panel-title">
-              <GitBranch size={18} />
-              <h2>Skills</h2>
-            </div>
-            {skills.length === 0 && <p className="muted">No repo skills yet.</p>}
-            {skills.map((skill) => (
-              <button
-                className={`skill-row ${skill.id === selectedSkillId ? "selected" : ""}`}
-                key={skill.id}
-                type="button"
-                onClick={() => setSelectedSkillId(skill.id)}
-              >
-                <span>{skill.name}</span>
-                <small>{skill.id}</small>
-              </button>
-            ))}
-          </section>
-        </aside>
+          <section className="lower-deck">
+            <section className="panel mutation-panel">
+              <div className="panel-title">
+                <FlaskConical size={18} />
+                <h2>Mutation Prompt</h2>
+              </div>
+              <div className="selected-skill">
+                <span>{selectedSkill?.name || "No skill selected"}</span>
+                {selectedSkill?.liveInstalled && (
+                  <span className="pill good">
+                    <ShieldCheck size={14} />
+                    live
+                  </span>
+                )}
+              </div>
+              <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              <div className="button-row">
+                <button type="button" onClick={handleMutation} disabled={!canMutate}>
+                  <Play size={16} />
+                  Mutate
+                </button>
+                <button type="button" className="secondary" onClick={handleEval} disabled={!canEval || loading}>
+                  <Activity size={16} />
+                  Run evals
+                </button>
+                <button type="button" className="promote" onClick={handlePromote} disabled={!canPromote || loading}>
+                  <Save size={16} />
+                  Promote
+                </button>
+              </div>
+            </section>
 
-        <section className="mutation-zone">
-          <section className="panel mutation-panel">
-            <div className="panel-title">
-              <FlaskConical size={18} />
-              <h2>Mutation Prompt</h2>
-            </div>
-            <div className="selected-skill">
-              <span>{selectedSkill?.name || "No skill selected"}</span>
-              {selectedSkill?.liveInstalled && (
-                <span className="pill good">
-                  <ShieldCheck size={14} />
-                  live
-                </span>
-              )}
-            </div>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-            <div className="button-row">
-              <button type="button" onClick={handleMutation} disabled={!canMutate}>
-                <Play size={16} />
-                Mutate
-              </button>
-              <button type="button" className="secondary" onClick={handleEval} disabled={!canEval || loading}>
-                <Activity size={16} />
-                Run evals
-              </button>
-              <button type="button" className="promote" onClick={handlePromote} disabled={!canPromote || loading}>
-                <Save size={16} />
-                Promote
-              </button>
-            </div>
-          </section>
-
-          <section className="metrics-band">
-            <Metric label="runs" value={runs.length} />
-            <Metric label="ready" value={statusCounts.candidate_ready || 0} />
-            <Metric label="passed" value={statusCounts.passed || 0} />
-            <Metric label="promoted" value={statusCounts.promoted || 0} />
-          </section>
-
-          <section className="timeline">
-            {runs.map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                className={`run-chip ${activeRunId === run.id ? "selected" : ""} ${statusTone(run.status)}`}
-                onClick={() => setActiveRunId(run.id)}
-              >
-                <span>{run.id}</span>
-                <small>{run.status}</small>
-              </button>
-            ))}
+            <section className="panel telemetry-panel">
+              <div className="panel-title">
+                <Activity size={18} />
+                <h2>Stats</h2>
+              </div>
+              <section className="metrics-band">
+                <Metric label="runs" value={runs.length} />
+                <Metric label="ready" value={statusCounts.candidate_ready || 0} />
+                <Metric label="passed" value={statusCounts.passed || 0} />
+                <Metric label="promoted" value={statusCounts.promoted || 0} />
+              </section>
+              <section className="timeline">
+                {runs.map((run) => (
+                  <button
+                    key={run.id}
+                    type="button"
+                    className={`run-chip ${activeRunId === run.id ? "selected" : ""} ${statusTone(run.status)}`}
+                    onClick={() => setActiveRunId(run.id)}
+                  >
+                    <span>{run.id}</span>
+                    <small>{run.status}</small>
+                  </button>
+                ))}
+              </section>
+              {runs.length === 0 && <p className="muted">No candidate lineage yet.</p>}
+            </section>
           </section>
         </section>
 
         <section className="right-rail">
+          <section className="panel specimen-panel">
+            <div className="microbe-preview" aria-hidden="true">
+              <div className="gene-strand mini" />
+              <div className="scanner-ring ring-a" />
+            </div>
+            <div className="specimen-meta">
+              <span>Active Skill</span>
+              <strong>{selectedSkill?.id || "none"}</strong>
+            </div>
+            <div className="mini-human" aria-hidden="true">
+              <span />
+            </div>
+          </section>
           <RunInspector run={activeRun} />
         </section>
       </section>
+
+      <section className="dna-footer" aria-label="Lab meters">
+        <div className="dna-counter">
+          <Dna size={18} />
+          <span>DNA {Math.max(5, skills.length + runs.length)}</span>
+        </div>
+        <Meter label="Activity" value={activityLevel} tone="magenta" />
+        <Meter label="Instability" value={severityLevel} tone="yellow" />
+        <Meter label="Stability" value={stabilityLevel} tone="violet" />
+      </section>
     </main>
+  );
+}
+
+function Meter({ label, value, tone }: { label: string; value: number; tone: "magenta" | "yellow" | "violet" }) {
+  return (
+    <div className="meter">
+      <span>{label}</span>
+      <div className={`meter-track ${tone}`}>
+        <i style={{ width: `${Math.max(4, Math.min(value, 100))}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -376,7 +438,7 @@ function RunInspector({ run }: { run?: RunRecord }) {
                 <div>
                   <strong>{result.name}</strong>
                   <small>
-                    exit {result.exitCode ?? "none"} · {Math.round(result.durationMs / 1000)}s
+                    exit {result.exitCode ?? "none"} / {Math.round(result.durationMs / 1000)}s
                   </small>
                   <ul>
                     {result.assertions.map((assertion, index) => (
@@ -403,4 +465,3 @@ function RunInspector({ run }: { run?: RunRecord }) {
     </section>
   );
 }
-
