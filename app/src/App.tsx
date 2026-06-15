@@ -36,6 +36,8 @@ function statusTone(status: string) {
 }
 
 export default function App() {
+  useButtonHoverSound();
+
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [liveSkills, setLiveSkills] = useState<LiveSkillSummary[]>([]);
   const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -349,6 +351,165 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function useButtonHoverSound() {
+  useEffect(() => {
+    type AudioWindow = Window &
+      typeof globalThis & {
+        webkitAudioContext?: typeof AudioContext;
+      };
+
+    const AudioContextClass = window.AudioContext || (window as AudioWindow).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    let context: AudioContext | null = null;
+    let currentHoverTarget: HTMLButtonElement | null = null;
+    let lastPlayedAt = 0;
+
+    async function getContext() {
+      context ||= new AudioContextClass();
+      if (context.state === "suspended") {
+        try {
+          await context.resume();
+        } catch {
+          return null;
+        }
+      }
+      return context.state === "running" ? context : null;
+    }
+
+    function connectFilteredNoise(audio: AudioContext, output: GainNode, startAt: number, stopAt: number) {
+      const sampleCount = Math.max(1, Math.floor(audio.sampleRate * (stopAt - startAt)));
+      const buffer = audio.createBuffer(1, sampleCount, audio.sampleRate);
+      const samples = buffer.getChannelData(0);
+
+      for (let index = 0; index < sampleCount; index += 1) {
+        const decay = 1 - index / sampleCount;
+        samples[index] = (Math.random() * 2 - 1) * decay * 0.42;
+      }
+
+      const source = audio.createBufferSource();
+      const filter = audio.createBiquadFilter();
+      const gain = audio.createGain();
+
+      source.buffer = buffer;
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(2700, startAt);
+      filter.Q.setValueAtTime(9, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.026, startAt + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(output);
+      source.start(startAt);
+      source.stop(stopAt);
+    }
+
+    function connectTone(
+      audio: AudioContext,
+      output: GainNode,
+      startAt: number,
+      stopAt: number,
+      type: OscillatorType,
+      frequency: number,
+      gainValue: number
+    ) {
+      const oscillator = audio.createOscillator();
+      const filter = audio.createBiquadFilter();
+      const gain = audio.createGain();
+
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.58, stopAt);
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(frequency * 1.8, startAt);
+      filter.frequency.exponentialRampToValueAtTime(Math.max(120, frequency * 0.7), stopAt);
+      filter.Q.setValueAtTime(4.8, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(gainValue, startAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+
+      oscillator.connect(filter);
+      filter.connect(gain);
+      gain.connect(output);
+      oscillator.start(startAt);
+      oscillator.stop(stopAt);
+    }
+
+    async function playHover(button: HTMLButtonElement) {
+      if (button.disabled || button.getAttribute("aria-disabled") === "true") return;
+
+      const now = window.performance.now();
+      if (now - lastPlayedAt < 65) return;
+      lastPlayedAt = now;
+
+      const audio = await getContext();
+      if (!audio) return;
+
+      const startAt = audio.currentTime + 0.004;
+      const stopAt = startAt + 0.15;
+      const output = audio.createGain();
+
+      output.gain.setValueAtTime(0.0001, startAt);
+      output.gain.exponentialRampToValueAtTime(0.062, startAt + 0.018);
+      output.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+      output.connect(audio.destination);
+
+      connectTone(audio, output, startAt, stopAt, "sawtooth", 1240, 0.18);
+      connectTone(audio, output, startAt + 0.012, stopAt + 0.012, "triangle", 92, 0.12);
+      connectFilteredNoise(audio, output, startAt, stopAt + 0.02);
+
+      window.setTimeout(() => {
+        output.disconnect();
+      }, 240);
+    }
+
+    function buttonFromEvent(event: Event) {
+      const target = event.target instanceof Element ? event.target : null;
+      return target?.closest("button") as HTMLButtonElement | null;
+    }
+
+    function handlePointerOver(event: PointerEvent) {
+      const button = buttonFromEvent(event);
+      if (!button || button === currentHoverTarget) return;
+      currentHoverTarget = button;
+      void playHover(button);
+    }
+
+    function handlePointerOut(event: PointerEvent) {
+      if (!currentHoverTarget) return;
+      const relatedTarget = event.relatedTarget;
+      if (relatedTarget instanceof Node && currentHoverTarget.contains(relatedTarget)) return;
+      currentHoverTarget = null;
+    }
+
+    function handleFocusIn(event: FocusEvent) {
+      const button = buttonFromEvent(event);
+      if (button) void playHover(button);
+    }
+
+    function armAudio() {
+      void getContext();
+    }
+
+    document.addEventListener("pointerover", handlePointerOver);
+    document.addEventListener("pointerout", handlePointerOut);
+    document.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("pointerdown", armAudio, { passive: true });
+    window.addEventListener("keydown", armAudio);
+
+    return () => {
+      document.removeEventListener("pointerover", handlePointerOver);
+      document.removeEventListener("pointerout", handlePointerOut);
+      document.removeEventListener("focusin", handleFocusIn);
+      window.removeEventListener("pointerdown", armAudio);
+      window.removeEventListener("keydown", armAudio);
+      void context?.close();
+    };
+  }, []);
 }
 
 function Meter({ label, value, tone }: { label: string; value: number; tone: "magenta" | "yellow" | "violet" }) {
