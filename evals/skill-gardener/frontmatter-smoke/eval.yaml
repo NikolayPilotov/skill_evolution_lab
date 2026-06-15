@@ -1,0 +1,11 @@
+name: Frontmatter smoke
+prompt: |
+  Use the installed skill-gardener skill to review a tiny Codex skill draft.
+  Reply with PASS if the skill emphasizes valid YAML frontmatter and concise runtime instructions.
+timeoutMs: 180000
+assertions:
+  - type: stdout_contains
+    value: PASS
+  - type: exit_code
+    value: 0
+
