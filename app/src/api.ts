@@ -1,4 +1,4 @@
-import type { LiveSkillSummary, RunRecord, SkillSummary } from "./types";
+import type { LiveSkillSummary, RunRecord, SkillReferenceOverview, SkillSummary } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -18,6 +18,10 @@ export function fetchSkills() {
 
 export function fetchLiveSkills() {
   return request<LiveSkillSummary[]>("/api/live-skills");
+}
+
+export function fetchSkillReferences(skillId: string) {
+  return request<SkillReferenceOverview>(`/api/skills/${encodeURIComponent(skillId)}/references`);
 }
 
 export function importSkill(skillId: string, overwrite = false) {

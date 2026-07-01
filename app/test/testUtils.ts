@@ -24,6 +24,28 @@ export async function createTempRepo() {
     ].join("\n"),
     "utf8"
   );
+  await fs.mkdir(path.join(repoRoot, "skills", "tiny-skill", "references"), { recursive: true });
+  await fs.writeFile(
+    path.join(repoRoot, "skills", "tiny-skill", "references", "workflow.md"),
+    [
+      "# Workflow",
+      "",
+      "Use this reference to explain the tiny skill workflow and validation model.",
+      "",
+      "## Inputs",
+      "",
+      "The skill accepts concise task descriptions.",
+      "",
+      "## Validation",
+      "",
+      "The skill checks output for directness and completion.",
+      "",
+      "```text",
+      "PASS",
+      "```"
+    ].join("\n"),
+    "utf8"
+  );
   await fs.mkdir(path.join(repoRoot, "evals", "tiny-skill", "smoke", "fixture"), { recursive: true });
   await fs.writeFile(
     path.join(repoRoot, "evals", "tiny-skill", "smoke", "eval.yaml"),

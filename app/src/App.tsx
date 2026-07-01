@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  BookOpen,
   CheckCircle2,
   Dna,
   FileDiff,
+  FileText,
   FlaskConical,
   GitBranch,
+  Hash,
+  Network,
   Play,
   RefreshCw,
   Save,
   ShieldCheck,
   TerminalSquare,
   Upload,
+  Volume2,
   XCircle
 } from "lucide-react";
 import {
@@ -19,12 +24,13 @@ import {
   fetchLiveSkills,
   fetchRun,
   fetchRuns,
+  fetchSkillReferences,
   fetchSkills,
   importSkill,
   promoteRun,
   runEvals
 } from "./api";
-import type { LiveSkillSummary, RunRecord, SkillSummary } from "./types";
+import type { LiveSkillSummary, ReferenceModule, RunRecord, SkillReferenceOverview, SkillSummary } from "./types";
 
 const busyStatuses = new Set(["created", "mutating", "evaluating"]);
 
@@ -36,14 +42,17 @@ function statusTone(status: string) {
 }
 
 export default function App() {
-  useButtonHoverSound();
-
+  const [soundReady, setSoundReady] = useState(false);
+  useButtonHoverSound(setSoundReady);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [liveSkills, setLiveSkills] = useState<LiveSkillSummary[]>([]);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [selectedSkillId, setSelectedSkillId] = useState("");
   const [selectedLiveSkillId, setSelectedLiveSkillId] = useState("");
   const [activeRunId, setActiveRunId] = useState("");
+  const [references, setReferences] = useState<SkillReferenceOverview>();
+  const [selectedReferenceId, setSelectedReferenceId] = useState("");
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const [prompt, setPrompt] = useState("Strengthen this skill with clearer workflow steps and a compact validation checklist.");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -102,6 +111,35 @@ export default function App() {
         setActiveRunId(nextRuns[0]?.id || "");
       })
       .catch((error) => setMessage(error.message));
+  }, [selectedSkillId]);
+
+  useEffect(() => {
+    if (!selectedSkillId) {
+      setReferences(undefined);
+      setSelectedReferenceId("");
+      return;
+    }
+
+    let cancelled = false;
+    setReferenceLoading(true);
+    fetchSkillReferences(selectedSkillId)
+      .then((overview) => {
+        if (cancelled) return;
+        setReferences(overview);
+        setSelectedReferenceId((current) =>
+          overview.modules.some((module) => module.id === current) ? current : overview.modules[0]?.id || ""
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) setMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setReferenceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSkillId]);
 
   useEffect(() => {
@@ -198,6 +236,15 @@ export default function App() {
         </nav>
         <button className="icon-button" type="button" onClick={() => refresh()} title="Refresh lab state">
           <RefreshCw size={18} />
+        </button>
+        <button
+          className={`icon-button ${soundReady ? "sound-ready" : ""}`}
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("skill-lab-audio-test"))}
+          title={soundReady ? "Play sound test" : "Enable sound"}
+          aria-label={soundReady ? "Play sound test" : "Enable sound"}
+        >
+          <Volume2 size={18} />
         </button>
       </section>
 
@@ -320,6 +367,13 @@ export default function App() {
               {runs.length === 0 && <p className="muted">No candidate lineage yet.</p>}
             </section>
           </section>
+
+          <ReferenceAtlas
+            overview={references}
+            loading={referenceLoading}
+            selectedReferenceId={selectedReferenceId}
+            onSelectReference={setSelectedReferenceId}
+          />
         </section>
 
         <section className="right-rail">
@@ -353,7 +407,130 @@ export default function App() {
   );
 }
 
-function useButtonHoverSound() {
+function ReferenceAtlas({
+  overview,
+  loading,
+  selectedReferenceId,
+  onSelectReference
+}: {
+  overview?: SkillReferenceOverview;
+  loading: boolean;
+  selectedReferenceId: string;
+  onSelectReference: (id: string) => void;
+}) {
+  const activeModule = overview?.modules.find((module) => module.id === selectedReferenceId) || overview?.modules[0];
+  const maxWords = Math.max(1, ...(overview?.modules.map((module) => module.wordCount) || [1]));
+
+  return (
+    <section className="panel reference-atlas">
+      <div className="panel-title">
+        <BookOpen size={18} />
+        <h2>Reference Atlas</h2>
+      </div>
+
+      {loading && <p className="muted">Loading reference structure...</p>}
+
+      {!loading && overview && (
+        <>
+          <section className="reference-overview">
+            <div className="reference-copy">
+              <span className="eyebrow">{overview.skillId}</span>
+              <p>{overview.explanation}</p>
+            </div>
+            <div className="reference-metrics" aria-label="Reference metrics">
+              <Metric label="modules" value={overview.modules.length} />
+              <Metric label="words" value={overview.totalWords} />
+              <Metric label="headings" value={overview.totalHeadings} />
+              <Metric label="code" value={overview.totalCodeBlocks} />
+            </div>
+          </section>
+
+          {overview.modules.length === 0 ? (
+            <p className="muted">No reference files found for this skill.</p>
+          ) : (
+            <section className="reference-workbench">
+              <div className="reference-map" aria-label="Reference graph">
+                <div className="graph-core">
+                  <Network size={18} />
+                  <span>{overview.skillName}</span>
+                </div>
+                <div className="graph-rings">
+                  {overview.modules.map((module, index) => (
+                    <button
+                      key={module.id}
+                      type="button"
+                      className={`graph-node node-${index % 8} ${activeModule?.id === module.id ? "selected" : ""}`}
+                      onClick={() => onSelectReference(module.id)}
+                      style={{ "--node-scale": `${0.86 + (module.wordCount / maxWords) * 0.42}` } as React.CSSProperties}
+                    >
+                      <span>{module.title}</span>
+                      <small>{module.wordCount}w</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="reference-modules">
+                {overview.modules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    className={`reference-module ${activeModule?.id === module.id ? "selected" : ""}`}
+                    onClick={() => onSelectReference(module.id)}
+                  >
+                    <span>
+                      <FileText size={15} />
+                      {module.title}
+                    </span>
+                    <small>
+                      {module.complexity} / {module.headingCount} sections
+                    </small>
+                  </button>
+                ))}
+              </div>
+
+              {activeModule && <ReferenceDetail module={activeModule} />}
+            </section>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function ReferenceDetail({ module }: { module: ReferenceModule }) {
+  return (
+    <section className="reference-detail">
+      <div className="reference-detail-heading">
+        <div>
+          <span className="eyebrow">{module.relativePath}</span>
+          <h3>{module.title}</h3>
+        </div>
+        <span className={`pill ${module.complexity === "deep" ? "ready" : "working"}`}>{module.complexity}</span>
+      </div>
+
+      <p>{module.summary}</p>
+
+      <div className="keyword-row">
+        {module.keywords.map((keyword) => (
+          <span key={keyword}>{keyword}</span>
+        ))}
+      </div>
+
+      <div className="section-stack">
+        {module.headings.slice(0, 10).map((heading) => (
+          <div className="section-line" key={`${heading.slug}-${heading.line}`}>
+            <Hash size={13} />
+            <span style={{ paddingLeft: `${Math.max(0, heading.level - 1) * 10}px` }}>{heading.title}</span>
+            <small>line {heading.line}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function useButtonHoverSound(onReady: (ready: boolean) => void) {
   useEffect(() => {
     type AudioWindow = Window &
       typeof globalThis & {
@@ -376,7 +553,9 @@ function useButtonHoverSound() {
           return null;
         }
       }
-      return context.state === "running" ? context : null;
+      if (context.state !== "running") return null;
+      onReady(true);
+      return context;
     }
 
     function connectFilteredNoise(audio: AudioContext, output: GainNode, startAt: number, stopAt: number) {
@@ -398,7 +577,7 @@ function useButtonHoverSound() {
       filter.frequency.setValueAtTime(2700, startAt);
       filter.Q.setValueAtTime(9, startAt);
       gain.gain.setValueAtTime(0.0001, startAt);
-      gain.gain.exponentialRampToValueAtTime(0.026, startAt + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.075, startAt + 0.014);
       gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
 
       source.connect(filter);
@@ -439,27 +618,27 @@ function useButtonHoverSound() {
       oscillator.stop(stopAt);
     }
 
-    async function playHover(button: HTMLButtonElement) {
+    async function playButtonSound(button: HTMLButtonElement, force = false) {
       if (button.disabled || button.getAttribute("aria-disabled") === "true") return;
 
       const now = window.performance.now();
-      if (now - lastPlayedAt < 65) return;
+      if (!force && now - lastPlayedAt < 65) return;
       lastPlayedAt = now;
 
       const audio = await getContext();
       if (!audio) return;
 
       const startAt = audio.currentTime + 0.004;
-      const stopAt = startAt + 0.15;
+      const stopAt = startAt + 0.18;
       const output = audio.createGain();
 
       output.gain.setValueAtTime(0.0001, startAt);
-      output.gain.exponentialRampToValueAtTime(0.062, startAt + 0.018);
+      output.gain.exponentialRampToValueAtTime(force ? 0.24 : 0.16, startAt + 0.018);
       output.gain.exponentialRampToValueAtTime(0.0001, stopAt);
       output.connect(audio.destination);
 
-      connectTone(audio, output, startAt, stopAt, "sawtooth", 1240, 0.18);
-      connectTone(audio, output, startAt + 0.012, stopAt + 0.012, "triangle", 92, 0.12);
+      connectTone(audio, output, startAt, stopAt, "sawtooth", force ? 980 : 1240, force ? 0.34 : 0.24);
+      connectTone(audio, output, startAt + 0.012, stopAt + 0.012, "triangle", force ? 164 : 112, force ? 0.22 : 0.16);
       connectFilteredNoise(audio, output, startAt, stopAt + 0.02);
 
       window.setTimeout(() => {
@@ -476,7 +655,7 @@ function useButtonHoverSound() {
       const button = buttonFromEvent(event);
       if (!button || button === currentHoverTarget) return;
       currentHoverTarget = button;
-      void playHover(button);
+      void playButtonSound(button);
     }
 
     function handlePointerOut(event: PointerEvent) {
@@ -488,7 +667,22 @@ function useButtonHoverSound() {
 
     function handleFocusIn(event: FocusEvent) {
       const button = buttonFromEvent(event);
-      if (button) void playHover(button);
+      if (button) void playButtonSound(button);
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const button = buttonFromEvent(event);
+      if (button) void playButtonSound(button, true);
+      else void getContext();
+    }
+
+    function handleAudioTest() {
+      const syntheticButton = document.querySelector(".sound-ready, .icon-button");
+      if (syntheticButton instanceof HTMLButtonElement) {
+        void playButtonSound(syntheticButton, true);
+      } else {
+        void getContext();
+      }
     }
 
     function armAudio() {
@@ -498,6 +692,8 @@ function useButtonHoverSound() {
     document.addEventListener("pointerover", handlePointerOver);
     document.addEventListener("pointerout", handlePointerOut);
     document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("skill-lab-audio-test", handleAudioTest);
     window.addEventListener("pointerdown", armAudio, { passive: true });
     window.addEventListener("keydown", armAudio);
 
@@ -505,11 +701,13 @@ function useButtonHoverSound() {
       document.removeEventListener("pointerover", handlePointerOver);
       document.removeEventListener("pointerout", handlePointerOut);
       document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("skill-lab-audio-test", handleAudioTest);
       window.removeEventListener("pointerdown", armAudio);
       window.removeEventListener("keydown", armAudio);
       void context?.close();
     };
-  }, []);
+  }, [onReady]);
 }
 
 function Meter({ label, value, tone }: { label: string; value: number; tone: "magenta" | "yellow" | "violet" }) {
