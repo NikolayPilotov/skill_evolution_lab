@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { getPaths } from "./lib/paths";
 import { importLiveSkill } from "./lib/importSkill";
+import { loadSkillReferences } from "./lib/references";
 import { listLiveSkills, listRepoSkills } from "./lib/skillParser";
 import { createMutationRun, loadRun, listRuns, promoteRun, startEvalRun } from "./lib/runs";
 import { pathExists } from "./lib/fsx";
@@ -34,6 +35,13 @@ export function createApp() {
     "/api/live-skills",
     asyncHandler(async (_req, res) => {
       res.json(await listLiveSkills());
+    })
+  );
+
+  app.get(
+    "/api/skills/:id/references",
+    asyncHandler(async (req, res) => {
+      res.json(await loadSkillReferences(req.params.id));
     })
   );
 

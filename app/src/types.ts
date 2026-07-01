@@ -14,6 +14,54 @@ export type LiveSkillSummary = {
   imported: boolean;
 };
 
+export type ReferenceHeading = {
+  level: number;
+  title: string;
+  slug: string;
+  line: number;
+};
+
+export type ReferenceModule = {
+  id: string;
+  title: string;
+  path: string;
+  relativePath: string;
+  summary: string;
+  keywords: string[];
+  headings: ReferenceHeading[];
+  lineCount: number;
+  wordCount: number;
+  headingCount: number;
+  codeBlockCount: number;
+  linkCount: number;
+  complexity: "compact" | "standard" | "deep";
+};
+
+export type SkillReferenceOverview = {
+  skillId: string;
+  skillName: string;
+  description: string;
+  referenceDir: string;
+  modules: ReferenceModule[];
+  totalWords: number;
+  totalHeadings: number;
+  totalCodeBlocks: number;
+  graph: {
+    nodes: Array<{
+      id: string;
+      label: string;
+      kind: "skill" | "reference" | "section";
+      weight: number;
+    }>;
+    edges: Array<{
+      from: string;
+      to: string;
+      strength: number;
+    }>;
+  };
+  explanation: string;
+};
+
 export type RunStatus =
   | "created"
   | "mutating"
