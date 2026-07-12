@@ -1,9 +1,8 @@
 .skill-lab/
 node_modules/
-app/node_modules/
-app/dist/
-app/coverage/
-app/.vite/
+skill-evolution-lab/node_modules/
+skill-evolution-lab/dist/
+skill-evolution-lab/coverage/
+skill-evolution-lab/.vite/
 *.log
 *.tmp
-

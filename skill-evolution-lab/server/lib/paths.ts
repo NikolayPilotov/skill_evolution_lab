@@ -1,13 +1,15 @@
 import os from "node:os";
 import path from "node:path";
 
+const APP_DIRECTORY_NAME = "skill-evolution-lab";
+
 export function getRepoRoot() {
   if (process.env.SKILL_LAB_REPO_ROOT) {
     return path.resolve(process.env.SKILL_LAB_REPO_ROOT);
   }
 
   const cwd = process.cwd();
-  return path.basename(cwd).toLowerCase() === "app"
+  return path.basename(cwd).toLowerCase() === APP_DIRECTORY_NAME
     ? path.resolve(cwd, "..")
     : cwd;
 }
@@ -26,7 +28,7 @@ export function getPaths() {
 
   return {
     repoRoot,
-    appRoot: path.join(repoRoot, "app"),
+    appRoot: path.join(repoRoot, APP_DIRECTORY_NAME),
     skillsDir: path.join(repoRoot, "skills"),
     evalsDir: path.join(repoRoot, "evals"),
     labDir: path.join(repoRoot, ".skill-lab"),

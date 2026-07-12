@@ -14,7 +14,7 @@ A local web app for evolving Codex skills through isolated Git worktrees, prompt
 ## Run Locally
 
 ```powershell
-cd C:\Users\nikol\Desktop\Optimization\app
+cd C:\Users\nikol\Desktop\Optimization\skill-evolution-lab
 npm install
 npm run dev
 ```
@@ -24,7 +24,7 @@ Open `http://127.0.0.1:5173`.
 ## Tests
 
 ```powershell
-cd C:\Users\nikol\Desktop\Optimization\app
+cd C:\Users\nikol\Desktop\Optimization\skill-evolution-lab
 npm test
 ```
 

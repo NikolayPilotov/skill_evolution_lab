@@ -12,13 +12,12 @@ describe("git diff safety", () => {
 
   it("blocks promotion when a candidate changed files outside its skill", () => {
     const report = checkSkillOnlyDiff("demo", {
-      files: ["skills/demo/SKILL.md", "app/src/App.tsx"],
+      files: ["skills/demo/SKILL.md", "skill-evolution-lab/src/App.tsx"],
       nameStatus: "",
       patch: ""
     });
 
     expect(report.allowed).toBe(false);
-    expect(report.violations).toEqual(["app/src/App.tsx"]);
+    expect(report.violations).toEqual(["skill-evolution-lab/src/App.tsx"]);
   });
 });
-
